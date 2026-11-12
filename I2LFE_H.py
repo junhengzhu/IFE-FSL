@@ -560,11 +560,7 @@ class spatial_attention(nn.Module):
         return x #, outputs, outputs2,
 
 
-# =====================================================================
-# 3.3 Cross-modal Information Interaction Module (CI2M), Eqs. (4)-(5)
-#     Inputs : Fh, Fl in R^{160x3x3}
-#     Output : F    in R^{160x3x3}
-# =====================================================================
+
 class CI2M(nn.Module):
     def __init__(self, channels=160, reduction=4, spatial_kernel=7):
         super(CI2M, self).__init__()
@@ -766,11 +762,7 @@ class Mapping(nn.Module):
 #
 #         return output
 
-# =====================================================================
-# 3.4 Low-Frequency Enhancement Module (LFEM), Eqs. (6)-(8)
-#     Inputs : fh in R^{c x 9 x 9}, fl in R^{1 x 9 x 9}  (original patches)
-#     Output : f  in R^{160 x 9 x 9}
-# =====================================================================
+
 class LFEM(nn.Module):
     def __init__(self, in_channels_hsi=5, in_channels_lidar=1,
                  out_channels=160, num_heads=4, head_dim=64):
