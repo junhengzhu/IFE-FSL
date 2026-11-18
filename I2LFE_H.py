@@ -772,8 +772,7 @@ class LFEM(nn.Module):
         self.head_dim = head_dim
         self.embed_dim = num_heads * head_dim          # 4 x 64 = 256
 
-        # Differential multi-scale convolution, Eq. (6):
-        # f' = phi_{1x1}(f) - (phi_{7x7}(f) - phi_{5x5}(f))
+        
         self.phi1_h = nn.Conv2d(in_channels_hsi, out_channels, 1, padding=0)
         self.phi5_h = nn.Conv2d(in_channels_hsi, out_channels, 5, padding=2)
         self.phi7_h = nn.Conv2d(in_channels_hsi, out_channels, 7, padding=3)
@@ -782,7 +781,7 @@ class LFEM(nn.Module):
         self.phi5_l = nn.Conv2d(in_channels_lidar, out_channels, 5, padding=2)
         self.phi7_l = nn.Conv2d(in_channels_lidar, out_channels, 7, padding=3)
 
-        # Cross-attention, Eq. (8): Q = f'_h, K = f'_l, V = f'_h + f'_l
+        
         self.q_proj = nn.Linear(out_channels, self.embed_dim)
         self.k_proj = nn.Linear(out_channels, self.embed_dim)
         self.v_proj = nn.Linear(out_channels, self.embed_dim)
@@ -792,7 +791,7 @@ class LFEM(nn.Module):
         self.out_proj = nn.Linear(self.embed_dim, out_channels)
 
     def forward(self, fh, fl):
-        # ---- Eq. (6): differential multi-scale low-frequency extraction ----
+        
         fh_prime = self.phi1_h(fh) - (self.phi7_h(fh) - self.phi5_h(fh))  # (B,160,9,9)
         fl_prime = self.phi1_l(fl) - (self.phi7_l(fl) - self.phi5_l(fl))  # (B,160,9,9)
 
@@ -802,23 +801,14 @@ class LFEM(nn.Module):
         k = self.k_proj(fl_prime.flatten(2).transpose(1, 2))               # (B,81,256)
         v = self.v_proj((fh_prime + fl_prime).flatten(2).transpose(1, 2))  # (B,81,256)
 
-        # ---- Eq. (8): f = Softmax(QK^T / sqrt(d_k)) V ----
+        
         attn_out, _ = self.attn(q, k, v)                                   # (B,81,256)
         attn_out = self.out_proj(attn_out)                                 # (B,81,160)
         f = attn_out.transpose(1, 2).reshape(b, c, h, w)                   # (B,160,9,9)
         return f
 
 class Network(nn.Module):
-    """IFE-FSL target-domain network: CI2M + LFEM.
 
-    Tensor flow (patch size p = 9):
-        x1 (B, c+1, 9, 9)  -> target_mapping -> (B,100,9,9) -> hsi_feature -> Fh (B,160,3,3)
-        x2 (B,1,9,9)       -> lidar_spat     -> (B,60,9,9)  -> conv2      -> Fl (B,160,3,3)
-        CI2M(Fh, Fl)                                                       -> F  (B,160,3,3)
-        LFEM(x1[:, :c], x2)                                                -> f  (B,160,9,9)
-        f is pooled to 3x3 and added to F; global pooling gives the 160-D
-        embedding used by the prototype/kNN classifier.
-    """
     def __init__(self, n_bands, n_classes):
         super(Network, self).__init__()
         self.n_bands = n_bands
@@ -849,16 +839,16 @@ class Network(nn.Module):
             fh_raw = x1[:, :self.hsi_channels, :, :]
             fl_raw = x2
 
-            # ---- deep spatial-spectral features ----
+            #
             x1_mapped = self.target_mapping(x1)
             fh = self.hsi_feature(x1_mapped)          # (B,160,3,3)
             fl = self.lidar_spat(x2).squeeze(2)        # (B,60,9,9)
             fl = self.conv2(fl)                       # (B,160,3,3)
 
-            # ---- CI2M: cross-modal information interaction ----
+          
             feature_map, fh_c, fl_c = self.ci2m(fh, fl)   # (B,160,3,3)
 
-            # ---- LFEM: low-frequency enhancement from original patches ----
+            
             low_freq = self.lfem(fh_raw, fl_raw)          # (B,160,9,9)
             low_freq = F.adaptive_avg_pool2d(low_freq,
                                              feature_map.shape[-2:])  # (B,160,3,3)
